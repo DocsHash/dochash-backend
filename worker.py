@@ -1,20 +1,35 @@
 import asyncio
-from app.models import database
-from app.services.blockchain_worker import blockchain_worker
+from app.db import db
+from app.blockchain import blockchain
 from app.logger import logger
+from app.config import config
 
-async def run_worker():
-    logger.info("Запуск Blockchain Worker...")
-    await database.connect()
+class BlockchainWorkerRunner:
+    def __init__(self):
+        self.db = db
+        self.blockchain = blockchain
+        self.logger = logger
+        self.config = config
+    
+    async def run(self):
+        """Run standalone blockchain worker"""
+        # Set log level from config
+        self.logger.set_level(self.config.LOG_LEVEL)
+        
+        # Start worker
+        self.logger.info("Запуск Blockchain Worker...")
+        await self.db.connect()
+        
+        try:
+            await self.blockchain.start_worker()
+        except KeyboardInterrupt:
+            self.logger.info("Получен сигнал остановки")
+        finally:
+            self.blockchain.stop_worker()
+            await self.db.disconnect()
+            self.logger.info("Blockchain Worker остановлен")
 
-    try:
-        await blockchain_worker.start()
-    except KeyboardInterrupt:
-        logger.info("Получен сигнал остановки")
-    finally:
-        blockchain_worker.stop()
-        await database.disconnect()
-        logger.info("Blockchain Worker остановлен")
-
+# Run the worker
 if __name__ == "__main__":
-    asyncio.run(run_worker())
+    worker_runner = BlockchainWorkerRunner()
+    asyncio.run(worker_runner.run())

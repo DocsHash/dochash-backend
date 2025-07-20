@@ -208,12 +208,40 @@ curl -X POST -F "file=@pdf-6.pdf" http://localhost:8000/api/process-document
 ### Обработка коллизий
 ```python
 # При коллизии verification_id система автоматически генерирует новый ID
-existing_id = await database.get_by_verification_id(verification_id)
+existing_id = await db.get_by_verification_id(verification_id)
 if existing_id:
     while existing_id:
-        verification_id, _, _ = DocumentProcessor.process_document(file_content, filename)
-        existing_id = await database.get_by_verification_id(verification_id)
+        verification_id, _, _ = document_processor.process_document(file_content, filename)
+        existing_id = await db.get_by_verification_id(verification_id)
 ```
+
+## Архитектура
+
+Архитектура сервиса построена на принципах объектно-ориентированного программирования с четким разделением ответственности.
+
+### Ключевые компоненты
+
+1. **API Layer** - обработка HTTP запросов
+   - `api_handlers.py` - класс APIController для обработки API запросов
+   - `routes.py` - определение маршрутов API
+
+2. **Core Services** - основная бизнес-логика
+   - `blockchain.py` - класс Blockchain для взаимодействия с блокчейном и обработки событий
+   - `services/document_processor.py` - класс DocumentProcessor для обработки документов и генерации хешей
+
+3. **Data Layer** - работа с данными
+   - `db.py` - класс DB для взаимодействия с базой данных
+   - `schemas.py` - классы для определения структур данных и сериализации
+
+4. **Infrastructure** - инфраструктурные компоненты
+   - `config.py` - классы Config и ConfigLoader для конфигурации приложения
+   - `logger.py` - класс Logger для логирования
+   - `app_factory.py` - класс AppFactory для создания и настройки приложения
+
+5. **Entry Points** - точки входа в приложение
+   - `main.py` - класс ApplicationServer для запуска сервера с воркером
+   - `worker.py` - класс BlockchainWorkerRunner для запуска только воркера
+   - `asgi.py` - класс ASGIApplication для ASGI интерфейса
 
 ## Структура файлов
 
@@ -224,19 +252,24 @@ backend/
 ├── entrypoint.sh           # Точки входа
 ├── requirements.txt        # Зависимости
 ├── .env                    # Конфигурация
+├── readme.md               # Документация (English)
+├── readme.ru.md            # Документация (Russian)
+├── main.py                 # Точка входа сервера
+├── worker.py               # Точка входа воркера
+├── asgi.py                 # ASGI точка входа
 └── app/
+    ├── __init__.py         # Инициализация пакета
     ├── api_handlers.py     # API логика
     ├── app_factory.py      # Фабрика приложений
-    ├── asgi.py            # Multi-worker API
-    ├── worker.py          # Blockchain worker
-    ├── main.py            # Single process
-    ├── models.py          # База данных
-    ├── schemas.py         # Msgspec схемы
-    ├── config.py          # Настройки
+    ├── blockchain.py       # Сервис блокчейна
+    ├── config.py           # Настройки
+    ├── db.py               # База данных
+    ├── logger.py           # Логирование
+    ├── routes.py           # API маршруты
+    ├── schemas.py          # Схемы данных
     └── services/
-        ├── document_processor.py
-        ├── blockchain_service.py
-        └── blockchain_worker.py
+        ├── __init__.py     # Пакет сервисов
+        └── document_processor.py # Обработка документов
 ```
 
 ## Кейсы использования

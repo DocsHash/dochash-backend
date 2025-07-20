@@ -1,10 +1,10 @@
 # Document Hash Backend API
 
-Backend system for document hashing and verification through blockchain on Starlette + PostgreSQL + Web3.
+Backend system for document hashing and verification through blockchain on Litestar + PostgreSQL + Web3.
 
 ## Technologies
 
-**Stack:** Starlette, Msgspec, PostgreSQL, Web3.py, Docker  
+**Stack:** Litestar, Msgspec, PostgreSQL, Web3.py, Docker  
 **Architecture:** API server + Blockchain worker + Event database
 
 ## Quick Start
@@ -211,12 +211,40 @@ curl -X POST -F "file=@pdf-6.pdf" http://localhost:8000/api/process-document
 ### Collision handling
 ```python
 # In case of verification_id collision, system automatically generates new ID
-existing_id = await database.get_by_verification_id(verification_id)
+existing_id = await db.get_by_verification_id(verification_id)
 if existing_id:
     while existing_id:
-        verification_id, _, _ = DocumentProcessor.process_document(file_content, filename)
-        existing_id = await database.get_by_verification_id(verification_id)
+        verification_id, _, _ = document_processor.process_document(file_content, filename)
+        existing_id = await db.get_by_verification_id(verification_id)
 ```
+
+## Architecture
+
+The architecture of the service is built on object-oriented programming principles with clear separation of responsibilities.
+
+### Key Components
+
+1. **API Layer** - HTTP request handling
+   - `api_handlers.py` - APIController class for API request handling
+   - `routes.py` - API route definitions
+
+2. **Core Services** - core business logic
+   - `blockchain.py` - Blockchain class for blockchain interaction and event processing
+   - `services/document_processor.py` - DocumentProcessor class for document processing and hash generation
+
+3. **Data Layer** - data operations
+   - `db.py` - DB class for database interaction
+   - `schemas.py` - classes for data structure definitions and serialization
+
+4. **Infrastructure** - infrastructure components
+   - `config.py` - Config and ConfigLoader classes for application configuration
+   - `logger.py` - Logger class for logging
+   - `app_factory.py` - AppFactory class for application creation and configuration
+
+5. **Entry Points** - application entry points
+   - `main.py` - ApplicationServer class for server with worker launch
+   - `worker.py` - BlockchainWorkerRunner class for worker-only launch
+   - `asgi.py` - ASGIApplication class for ASGI interface
 
 ## File Structure
 
@@ -227,19 +255,24 @@ backend/
 ├── entrypoint.sh           # Entry points
 ├── requirements.txt        # Dependencies
 ├── .env                    # Configuration
+├── readme.md               # Documentation (English)
+├── readme.ru.md            # Documentation (Russian)
+├── main.py                 # Server entry point
+├── worker.py               # Worker entry point
+├── asgi.py                 # ASGI entry point
 └── app/
+    ├── __init__.py         # Package initialization
     ├── api_handlers.py     # API logic
     ├── app_factory.py      # Application factory
-    ├── asgi.py            # Multi-worker API
-    ├── worker.py          # Blockchain worker
-    ├── main.py            # Single process
-    ├── models.py          # Database
-    ├── schemas.py         # Msgspec schemas
-    ├── config.py          # Settings
+    ├── blockchain.py       # Blockchain service
+    ├── config.py           # Settings
+    ├── db.py               # Database
+    ├── logger.py           # Logging
+    ├── routes.py           # API routes
+    ├── schemas.py          # Data schemas
     └── services/
-        ├── document_processor.py
-        ├── blockchain_service.py
-        └── blockchain_worker.py
+        ├── __init__.py     # Services package
+        └── document_processor.py # Document processing
 ```
 
 ## Use Cases
@@ -307,7 +340,7 @@ API_WORKERS=4
 
 ## Performance
 
-- **API:** Async Starlette + Msgspec = high performance
+- **API:** Async Litestar + Msgspec = high performance
 - **Worker:** Blockchain event batching
 - **Database:** Indexes for fast search
 - **Scaling:** Multiple API workers + Single worker
