@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: document_hash
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  api:
+    build: .
+    command: ["api"]
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/document_hash
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - BLOCKCHAIN_NETWORK=localhost
+      - CONTRACT_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3
+      - RPC_URL=http://host.docker.internal:8545
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:8080
+      - API_WORKERS=4
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    scale: 1
+
+  worker:
+    build: .
+    command: ["worker"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/document_hash
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - BLOCKCHAIN_NETWORK=localhost
+      - CONTRACT_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3
+      - RPC_URL=http://host.docker.internal:8545
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    scale: 1
+
+  single:
+    build: .
+    command: ["single"]
+    ports:
+      - "8001:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/document_hash
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - BLOCKCHAIN_NETWORK=localhost
+      - CONTRACT_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3
+      - RPC_URL=http://host.docker.internal:8545
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:8080
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    profiles: ["single"]
+
+volumes:
+  postgres_data:
