@@ -1,14 +1,11 @@
-from sqlalchemy import Column, String, DateTime, Integer, Index, create_engine
+from sqlalchemy import Column, String, DateTime, Integer, Index
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import func
-from datetime import datetime
-import asyncio
 import asyncpg
 from app.config import config
+from app.logger import logger
 
 Base = declarative_base()
-
 
 class DocumentRecord(Base):
     __tablename__ = "document_records"
@@ -27,7 +24,6 @@ class DocumentRecord(Base):
         Index('idx_block_number', 'block_number'),
     )
 
-
 class Database:
     def __init__(self):
         self.connection = None
@@ -36,9 +32,9 @@ class Database:
         try:
             self.connection = await asyncpg.connect(config.DATABASE_URL)
             await self.create_tables()
-            print("✅ База данных подключена")
+            logger.info("База данных подключена")
         except Exception as e:
-            print(f"❌ Ошибка подключения к базе данных: {e}")
+            logger.error(f"Ошибка подключения к базе данных: {e}")
             raise
 
     async def disconnect(self):
@@ -47,34 +43,19 @@ class Database:
 
     async def create_tables(self):
         create_sql = """
-                     CREATE TABLE IF NOT EXISTS document_records \
-                     ( \
-                         id \
-                         SERIAL \
-                         PRIMARY \
-                         KEY, \
-                         verification_id \
-                         VARCHAR \
-                     ( \
-                         64 \
-                     ) UNIQUE NOT NULL,
-                         document_hash VARCHAR \
-                     ( \
-                         128 \
-                     ) UNIQUE NOT NULL,
-                         creator_address VARCHAR \
-                     ( \
-                         42 \
-                     ) NOT NULL,
-                         timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                         block_number INTEGER NOT NULL
-                         );
-
-                     CREATE INDEX IF NOT EXISTS idx_verification_id ON document_records(verification_id);
-                     CREATE INDEX IF NOT EXISTS idx_document_hash ON document_records(document_hash);
-                     CREATE INDEX IF NOT EXISTS idx_creator_address ON document_records(creator_address);
-                     CREATE INDEX IF NOT EXISTS idx_block_number ON document_records(block_number); \
-                     """
+            CREATE TABLE IF NOT EXISTS document_records (
+                id SERIAL PRIMARY KEY,
+                verification_id VARCHAR(64) UNIQUE NOT NULL,
+                document_hash VARCHAR(128) UNIQUE NOT NULL,
+                creator_address VARCHAR(42) NOT NULL,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                block_number INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_verification_id ON document_records(verification_id);
+            CREATE INDEX IF NOT EXISTS idx_document_hash ON document_records(document_hash);
+            CREATE INDEX IF NOT EXISTS idx_creator_address ON document_records(creator_address);
+            CREATE INDEX IF NOT EXISTS idx_block_number ON document_records(block_number);
+        """
         await self.connection.execute(create_sql)
 
     async def insert_document(self, verification_id: str, document_hash: str,
@@ -82,12 +63,12 @@ class Database:
         try:
             await self.connection.execute(
                 """INSERT INTO document_records
-                       (verification_id, document_hash, creator_address, block_number)
+                   (verification_id, document_hash, creator_address, block_number)
                    VALUES ($1, $2, $3, $4) ON CONFLICT (verification_id) DO NOTHING""",
                 verification_id, document_hash, creator_address, block_number
             )
         except Exception as e:
-            print(f"❌ Ошибка вставки документа: {e}")
+            logger.error(f"Ошибка вставки документа: {e}")
 
     async def get_by_verification_id(self, verification_id: str):
         return await self.connection.fetchrow(
@@ -102,11 +83,9 @@ class Database:
         )
 
     async def hash_exists(self, document_hash: str) -> bool:
-        result = await self.connection.fetchval(
+        return await self.connection.fetchval(
             "SELECT EXISTS(SELECT 1 FROM document_records WHERE document_hash = $1)",
             document_hash
         )
-        return result
-
 
 database = Database()
