@@ -1,47 +1,29 @@
-from sqlalchemy import Column, String, DateTime, Integer, Index
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.sql import func
 import asyncpg
-from app.config import config
-from app.logger import logger
+from typing import Optional, Dict, Any
+from .config import config
+from .logger import logger
 
-Base = declarative_base()
-
-class DocumentRecord(Base):
-    __tablename__ = "document_records"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    verification_id = Column(String(64), unique=True, nullable=False, index=True)
-    document_hash = Column(String(128), unique=True, nullable=False, index=True)
-    creator_address = Column(String(42), nullable=False, index=True)
-    timestamp = Column(DateTime, nullable=False, default=func.now())
-    block_number = Column(Integer, nullable=False, index=True)
-
-    __table_args__ = (
-        Index('idx_verification_id', 'verification_id'),
-        Index('idx_document_hash', 'document_hash'),
-        Index('idx_creator_address', 'creator_address'),
-        Index('idx_block_number', 'block_number'),
-    )
-
-class Database:
+class DB:
     def __init__(self):
         self.connection = None
-
-    async def connect(self):
+        self.connected = False
+    
+    async def connect(self) -> None:
         try:
             self.connection = await asyncpg.connect(config.DATABASE_URL)
             await self.create_tables()
+            self.connected = True
             logger.info("База данных подключена")
         except Exception as e:
             logger.error(f"Ошибка подключения к базе данных: {e}")
             raise
-
-    async def disconnect(self):
+    
+    async def disconnect(self) -> None:
         if self.connection:
             await self.connection.close()
-
-    async def create_tables(self):
+            self.connected = False
+    
+    async def create_tables(self) -> None:
         create_sql = """
             CREATE TABLE IF NOT EXISTS document_records (
                 id SERIAL PRIMARY KEY,
@@ -57,9 +39,9 @@ class Database:
             CREATE INDEX IF NOT EXISTS idx_block_number ON document_records(block_number);
         """
         await self.connection.execute(create_sql)
-
+    
     async def insert_document(self, verification_id: str, document_hash: str,
-                              creator_address: str, block_number: int):
+                             creator_address: str, block_number: int) -> None:
         try:
             await self.connection.execute(
                 """INSERT INTO document_records
@@ -69,23 +51,38 @@ class Database:
             )
         except Exception as e:
             logger.error(f"Ошибка вставки документа: {e}")
-
-    async def get_by_verification_id(self, verification_id: str):
-        return await self.connection.fetchrow(
-            "SELECT * FROM document_records WHERE verification_id = $1",
-            verification_id
-        )
-
-    async def get_by_document_hash(self, document_hash: str):
-        return await self.connection.fetchrow(
-            "SELECT * FROM document_records WHERE document_hash = $1",
-            document_hash
-        )
-
+    
+    async def get_by_verification_id(self, verification_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            record = await self.connection.fetchrow(
+                "SELECT * FROM document_records WHERE verification_id = $1",
+                verification_id
+            )
+            return dict(record) if record else None
+        except Exception as e:
+            logger.error(f"Ошибка получения документа по ID: {e}")
+            return None
+    
+    async def get_by_document_hash(self, document_hash: str) -> Optional[Dict[str, Any]]:
+        try:
+            record = await self.connection.fetchrow(
+                "SELECT * FROM document_records WHERE document_hash = $1",
+                document_hash
+            )
+            return dict(record) if record else None
+        except Exception as e:
+            logger.error(f"Ошибка получения документа по хешу: {e}")
+            return None
+    
     async def hash_exists(self, document_hash: str) -> bool:
-        return await self.connection.fetchval(
-            "SELECT EXISTS(SELECT 1 FROM document_records WHERE document_hash = $1)",
-            document_hash
-        )
+        try:
+            return await self.connection.fetchval(
+                "SELECT EXISTS(SELECT 1 FROM document_records WHERE document_hash = $1)",
+                document_hash
+            )
+        except Exception as e:
+            logger.error(f"Ошибка проверки существования хеша: {e}")
+            return False
 
-database = Database()
+# Singleton instance
+db = DB()

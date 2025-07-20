@@ -1,23 +1,14 @@
 import msgspec
-from typing import Optional, Union, Dict, Any
+from typing import Optional, TypeVar, Type, Any
 
-class DocumentProcessRequest(msgspec.Struct):
-    file: bytes
-    filename: str
-
-class DocumentProcessResponse(msgspec.Struct):
+# Response schemas
+class DocumentResponse(msgspec.Struct):
     verification_id: str
     document_hash: str
     is_unique: bool
     message: str
 
-class DocumentVerifyRequest(msgspec.Struct):
-    verification_id: Optional[str] = None
-    document_hash: Optional[str] = None
-    file: Optional[bytes] = None
-    filename: Optional[str] = None
-
-class DocumentVerifyResponse(msgspec.Struct):
+class VerifyResponse(msgspec.Struct):
     verified: bool
     message: str
     timestamp: Optional[str] = None
@@ -30,3 +21,20 @@ class HealthResponse(msgspec.Struct):
 class ErrorResponse(msgspec.Struct):
     error: str
     detail: Optional[str] = None
+
+# Type variable for generic serialization
+T = TypeVar('T')
+
+class Serializer:
+    @staticmethod
+    def to_json(obj: Any) -> bytes:
+        """Convert object to JSON bytes"""
+        return msgspec.json.encode(obj)
+    
+    @staticmethod
+    def from_json(data: bytes, type_: Type[T]) -> T:
+        """Convert JSON bytes to object"""
+        return msgspec.json.decode(data, type=type_)
+
+# Singleton instance
+serializer = Serializer()
